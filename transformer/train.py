@@ -1,4 +1,8 @@
 # train.py
+"""
+sys.path.extend(['C:\\Users\\Shuvendu Roy\\Desktop\\Projects\\language_representation_models\\transformer', 'C:/Users/Shuvendu Roy/Desktop/Projects/language_representation_models'])
+"""
+
 
 from utils import *
 from model import *

@@ -3,8 +3,10 @@
 from torch import nn
 import torch.nn.functional as F
 
+
 class PositionwiseFeedForward(nn.Module):
-    "Positionwise feed-forward network."
+    """Positionwise feed-forward network."""
+
     def __init__(self, d_model, d_ff, dropout=0.1):
         super(PositionwiseFeedForward, self).__init__()
         self.w_1 = nn.Linear(d_model, d_ff)
@@ -12,5 +14,5 @@ class PositionwiseFeedForward(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        "Implements FFN equation."
+        """Implements FFN equation."""
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
