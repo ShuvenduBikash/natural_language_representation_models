@@ -41,6 +41,7 @@ class Transformer(nn.Module):
 
         # Convert input to (batch_size, d_model) for linear layer
         final_feature_map = encoded_sents[:,-1,:]
+        final_feature_map = encoded_sents.mean(dim=1)
         final_out = self.fc(final_feature_map)
         return self.softmax(final_out)
 
