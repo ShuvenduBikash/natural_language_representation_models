@@ -1,4 +1,6 @@
 """
+sys.path.extend(['C:\\Users\\Shuvendu Roy\\Desktop\\Projects\\language_representation_models\\BERT', 'C:/Users/Shuvendu Roy/Desktop/Projects/language_representation_models'])
+
   code by Tae Hwan Jung(Jeff Jung) @graykode
   Reference : https://github.com/jadore801120/attention-is-all-you-need-pytorch
               https://github.com/JayParks/transformer, https://github.com/dhlee347/pytorchic-bert
@@ -10,10 +12,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import codecs
 from torch.autograd import Variable
 
 # BERT Parameters
-maxlen = 30
+maxlen = 50
 batch_size = 6
 max_pred = 5  # max tokens of prediction
 n_layers = 6
@@ -23,6 +26,41 @@ d_ff = 768 * 4  # 4*d_model, FeedForward dimension
 d_k = d_v = 64  # dimension of K(=Q), V
 n_segments = 2
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+def open_unicode_file(filename):
+    """
+    Open the file and return a pointer to the file
+    :param filename: name of the file
+    :return: pointer to file
+    """
+    f = codecs.open(filename, mode='r', encoding='utf-8', errors='ignore')
+    return f
+
+
+def open_file_and_return_texts(filename, limit=None):
+    """
+    Open the file, real all lines
+    :param limit: (int) number of lines to read from file
+    :param filename: name of the file
+    :return: text
+    """
+    text = ""
+
+    f = open_unicode_file(filename)
+    if limit is not None:
+        for i in range(limit):
+            line = f.readline()
+            text+=line
+    else:
+        for line in f:
+            text += line
+    f.close()
+
+    return text
+
+
 text = (
     'Hello, how are you? I am Romeo.\n'
     'Hello, Romeo My name is Juliet. Nice to meet you.\n'
@@ -31,6 +69,8 @@ text = (
     'Oh Congratulations, Juliet\n'
     'Thanks you Romeo'
 )
+text = open_file_and_return_texts('../data/plain_text.txt')
+
 sentences = re.sub("[.,!?\\-]", '', text.lower()).split('\n')  # filter '.', ',', '?', '!'
 word_list = list(set(" ".join(sentences).split()))
 word_dict = {'[PAD]': 0, '[CLS]': 1, '[SEP]': 2, '[MASK]': 3}
@@ -118,6 +158,7 @@ class Embedding(nn.Module):
         seq_len = x.size(1)
         pos = torch.arange(seq_len, dtype=torch.long)
         pos = pos.unsqueeze(0).expand_as(x)  # (seq_len,) -> (batch_size, seq_len)
+        pos = pos.to(device)
         embedding = self.tok_embed(x) + self.pos_embed(pos) + self.seg_embed(seg)
         return self.norm(embedding)
 
@@ -141,6 +182,8 @@ class MultiHeadAttention(nn.Module):
         self.W_Q = nn.Linear(d_model, d_k * n_heads)
         self.W_K = nn.Linear(d_model, d_k * n_heads)
         self.W_V = nn.Linear(d_model, d_v * n_heads)
+        self.linear = nn.Linear(n_heads * d_v, d_model)
+        self.norm = nn.LayerNorm(d_model)
 
     def forward(self, Q, K, V, attn_mask):
         # q: [batch_size x len_q x d_model], k: [batch_size x len_k x d_model], v: [batch_size x len_k x d_model]
@@ -155,8 +198,9 @@ class MultiHeadAttention(nn.Module):
         # context: [batch_size x n_heads x len_q x d_v], attn: [batch_size x n_heads x len_q(=len_k) x len_k(=len_q)]
         context, attn = ScaledDotProductAttention()(q_s, k_s, v_s, attn_mask)
         context = context.transpose(1, 2).contiguous().view(batch_size, -1, n_heads * d_v) # context: [batch_size x len_q x n_heads * d_v]
-        output = nn.Linear(n_heads * d_v, d_model)(context)
-        return nn.LayerNorm(d_model)(output + residual), attn  # output: [batch_size x len_q x d_model]
+        context = context.to(device)
+        output = self.linear(context)
+        return self.norm(output + residual), attn  # output: [batch_size x len_q x d_model]
 
 
 class PoswiseFeedForwardNet(nn.Module):
@@ -219,15 +263,18 @@ class BERT(nn.Module):
         return logits_lm, logits_clsf
 
 
-model = BERT()
-criterion = nn.CrossEntropyLoss()
+model = BERT().cuda()
+criterion = nn.CrossEntropyLoss().to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 batch = make_batch()
 input_ids, segment_ids, masked_tokens, masked_pos, isNext = zip(*batch)
 input_ids, segment_ids, masked_tokens, masked_pos, isNext = \
-    torch.LongTensor(input_ids), torch.LongTensor(segment_ids), torch.LongTensor(masked_tokens), \
-    torch.LongTensor(masked_pos), torch.LongTensor(isNext)
+    torch.cuda.LongTensor(input_ids), torch.cuda.LongTensor(segment_ids), torch.cuda.LongTensor(masked_tokens), \
+    torch.cuda.LongTensor(masked_pos), torch.cuda.LongTensor(isNext)
+
+import time
+t = time.time()
 
 for epoch in range(100):
     optimizer.zero_grad()
@@ -241,17 +288,17 @@ for epoch in range(100):
     loss.backward()
     optimizer.step()
 
+print(time.time() - t)
 # Predict mask tokens ans isNext
 input_ids, segment_ids, masked_tokens, masked_pos, isNext = batch[0]
-print(text)
 print([number_dict[w] for w in input_ids if number_dict[w] != '[PAD]'])
 
-logits_lm, logits_clsf = model(torch.LongTensor([input_ids]), \
-                               torch.LongTensor([segment_ids]), torch.LongTensor([masked_pos]))
-logits_lm = logits_lm.data.max(2)[1][0].data.numpy()
+logits_lm, logits_clsf = model(torch.cuda.LongTensor([input_ids]), \
+                               torch.cuda.LongTensor([segment_ids]), torch.cuda.LongTensor([masked_pos]))
+logits_lm = logits_lm.data.max(2)[1][0].data.cpu().numpy()
 print('masked tokens list : ', [pos for pos in masked_tokens if pos != 0])
 print('predict masked tokens list : ', [pos for pos in logits_lm if pos != 0])
 
-logits_clsf = logits_clsf.data.max(1)[1].data.numpy()[0]
+logits_clsf = logits_clsf.data.max(1)[1].data.cpu().numpy()[0]
 print('isNext : ', True if isNext else False)
 print('predict isNext : ', True if logits_clsf else False)
