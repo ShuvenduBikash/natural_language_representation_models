@@ -121,7 +121,12 @@ def make_batch():
             n_pad = max_pred - n_pred
             masked_tokens.extend([0] * n_pad)
             masked_pos.extend([0] * n_pad)
-
+        """
+        input_ids = (list) 50
+        segment_ids = (list) 50 [0 0 0 0 1 1 1 1 0 0 0 0 .....]
+        masked_tokens = (list) 5
+        masked_position = (list) 5
+        """
         if tokens_a_index + 1 == tokens_b_index and positive < batch_size / 2:
             batch.append([input_ids, segment_ids, masked_tokens, masked_pos, True])  # IsNext
             positive += 1
@@ -273,8 +278,6 @@ input_ids, segment_ids, masked_tokens, masked_pos, isNext = \
     torch.cuda.LongTensor(input_ids), torch.cuda.LongTensor(segment_ids), torch.cuda.LongTensor(masked_tokens), \
     torch.cuda.LongTensor(masked_pos), torch.cuda.LongTensor(isNext)
 
-import time
-t = time.time()
 
 for epoch in range(100):
     optimizer.zero_grad()
