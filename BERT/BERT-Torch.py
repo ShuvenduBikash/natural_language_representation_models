@@ -291,7 +291,6 @@ for epoch in range(100):
     loss.backward()
     optimizer.step()
 
-print(time.time() - t)
 # Predict mask tokens ans isNext
 input_ids, segment_ids, masked_tokens, masked_pos, isNext = batch[0]
 print([number_dict[w] for w in input_ids if number_dict[w] != '[PAD]'])
